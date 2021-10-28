@@ -89,15 +89,15 @@ var states = []state{
 			}
 
 			el.MustWaitVisible()
-			el.Focus()
-
 			el.MustSelectAllText().MustInput("")
 			el.MustInput(strings.TrimSpace(username))
 
 			sb := pg.MustElement(`input[type=submit]`)
 
 			sb.MustWaitVisible()
+			wait := pg.MustWaitRequestIdle()
 			sb.MustClick()
+			wait()
 
 			pContext := pg.GetContext()
 			defer func() {
@@ -125,16 +125,12 @@ var states = []state{
 			}()
 
 			go func() {
-				_, err := pg.Timeout(20 * time.Second).Race().
+				pg.Timeout(20 * time.Second).Race().
 					Element("input[name=loginfmt].has-error").
 					Element("input[name=loginfmt].moveOffScreen").
 					Element("input[name=loginfmt]").Handle(func(e *rod.Element) error {
 					return e.WaitInvisible()
 				}).Do()
-
-				if err != nil {
-					pg.CancelTimeout()
-				}
 
 				select {
 				case <-ctx.Done():
@@ -173,11 +169,12 @@ var states = []state{
 			}
 
 			el.MustWaitVisible()
-			el.Focus()
 			el.MustSelectAllText().MustInput("")
 			el.MustInput(password)
 
+			wait := pg.MustWaitRequestIdle()
 			pg.MustElement("span[class=submit],input[type=submit]").MustClick()
+			wait()
 
 			time.Sleep(time.Millisecond * 500)
 		},
@@ -225,6 +222,10 @@ var states = []state{
 				survey.AskOne(promptUsername, &username, survey.WithValidator(survey.Required))
 			}
 
+			el.MustWaitVisible()
+			el.MustSelectAllText().MustInput("")
+			el.MustInput(username)
+
 			if shouldAskPassword {
 				promptPasswd := &survey.Password{
 					Message: "Okta Password:",
@@ -232,16 +233,10 @@ var states = []state{
 				survey.AskOne(promptPasswd, &password, survey.WithValidator(survey.Required))
 			}
 
-			el.MustVisible()
-			el.Focus()
-			el.MustSelectAllText().MustInput("")
-			el.MustInput(username)
-
 			time.Sleep(time.Millisecond * 500)
 
 			pwdEl := pg.MustElement(`input[id="okta-signin-password"]`)
-			pwdEl.MustVisible()
-			pwdEl.Focus()
+			pwdEl.MustWaitVisible()
 			pwdEl.MustSelectAllText().MustInput("")
 			pwdEl.MustInput(password)
 
@@ -249,7 +244,9 @@ var states = []state{
 
 			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled])[type=submit]`)
 			if err == nil {
+				wait := pg.MustWaitRequestIdle()
 				btn.MustClick()
+				wait()
 				time.Sleep(time.Millisecond * 500)
 			}
 		},
@@ -270,7 +267,9 @@ var states = []state{
 			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled])[type=submit]`)
 			if err == nil && btn != nil {
 				btn.MustWaitVisible()
+				wait := pg.MustWaitRequestIdle()
 				btn.MustClick()
+				wait()
 				time.Sleep(time.Millisecond * 500)
 			}
 		},

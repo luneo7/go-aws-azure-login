@@ -1,3 +1,5 @@
+.DS_Store
+/.vscode
 /bin
 /release
 /go-aws-azure-login
