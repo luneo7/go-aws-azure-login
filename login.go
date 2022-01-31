@@ -411,14 +411,9 @@ func createLoginUrl(appIDUri string, tenantID string, assertionConsumerServiceUR
 }
 
 func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string) string {
-	var browser *rod.Browser
+	launcher.SetDefaultHosts([]launcher.Host{launcher.HostGoogle})
 
-	if path, exists := launcher.LookPath(); exists {
-		u := launcher.New().Bin(path).MustLaunch()
-		browser = rod.New().ControlURL(u).MustConnect()
-	} else {
-		browser = rod.New().MustConnect()
-	}
+	browser := rod.New().MustConnect()
 	defer browser.MustClose()
 
 	router := browser.HijackRequests()

@@ -30,3 +30,5 @@ require (
 	golang.org/x/term v0.0.0-20210503060354-a79de5458b56 // indirect
 	golang.org/x/text v0.3.3 // indirect
 )
+
+replace github.com/go-rod/rod => github.com/luneo7/rod v0.101.9-0.20220131185440-7433d1ef4c0a
