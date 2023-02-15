@@ -181,9 +181,9 @@ var states = []state{
 	},
 	{
 		name:     "OKTA username/password input",
-		selector: `input[id="okta-signin-username"]:not([disabled])`,
+		selector: `form:not(.o-form-saving) > div span.okta-form-input-field input[autocomplete="username"]:not([disabled])`,
 		handler: func(pg *rod.Page, el *rod.Element, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string) {
-			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".o-form-error-container")
+			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(`div[role="alert"]`)
 
 			if alert != nil && err == nil {
 				t, _ := alert.Text()
@@ -235,14 +235,14 @@ var states = []state{
 
 			time.Sleep(time.Millisecond * 500)
 
-			pwdEl := pg.MustElement(`input[id="okta-signin-password"]`)
+			pwdEl := pg.MustElement(`input[type="password"]`)
 			pwdEl.MustWaitVisible()
 			pwdEl.MustSelectAllText().MustInput("")
 			pwdEl.MustInput(password)
 
 			time.Sleep(time.Millisecond * 500)
 
-			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled])[type=submit]`)
+			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled]):not(.link-button-disabled):not(.btn-disabled)[type=submit]`)
 			if err == nil {
 				wait := pg.MustWaitRequestIdle()
 				btn.MustClick()
@@ -252,10 +252,10 @@ var states = []state{
 		},
 	},
 	{
-		name:     "OKTA PUSH Form",
-		selector: `form[action="/signin/verify/okta/push"] input:not([disabled])[type="submit"]`,
+		name:     "OKTA SELECT PUSH Form",
+		selector: `div[data-se="okta_verify-push"] > a:not([disabled]):not(.link-button-disabled):not(.btn-disabled)`,
 		handler: func(pg *rod.Page, el *rod.Element, _ bool, defaultUserName string, _ *string, _ *string, _ *string) {
-			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".o-form-error-container")
+			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".infobox-error")
 
 			if alert != nil && err == nil {
 				t, _ := alert.Text()
@@ -264,7 +264,30 @@ var states = []state{
 				}
 			}
 
-			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled])[type=submit]`)
+			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`div[data-se="okta_verify-push"] > a:not([disabled]):not(.btn-disabled):not(.link-button-disabled)`)
+			if err == nil && btn != nil {
+				btn.MustWaitVisible()
+				wait := pg.MustWaitRequestIdle()
+				btn.MustClick()
+				wait()
+				time.Sleep(time.Millisecond * 500)
+			}
+		},
+	},
+	{
+		name:     "OKTA DO PUSH Form",
+		selector: `a.send-push:not([disabled]):not(.link-button-disabled):not(.btn-disabled)`,
+		handler: func(pg *rod.Page, el *rod.Element, _ bool, defaultUserName string, _ *string, _ *string, _ *string) {
+			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".infobox-error")
+
+			if alert != nil && err == nil {
+				t, _ := alert.Text()
+				if t != "" {
+					fmt.Println(t)
+				}
+			}
+
+			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`a.send-push:not([disabled]):not(.btn-disabled):not(.link-button-disabled)`)
 			if err == nil && btn != nil {
 				btn.MustWaitVisible()
 				wait := pg.MustWaitRequestIdle()
