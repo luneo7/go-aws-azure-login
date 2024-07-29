@@ -179,7 +179,7 @@ var states = []state{
 		},
 	},
 	{
-		name:     "OKTA username/password input",
+		name:     "OKTA username input",
 		selector: `form:not(.o-form-saving) > div span.okta-form-input-field input[name="identifier"]:not([disabled])`,
 		handler: func(pg *rod.Page, el *rod.Element, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string) {
 			errorSelector := `div.o-form-error-container`
@@ -202,22 +202,12 @@ var states = []state{
 			}
 
 			var username string
-			var password string
-			shouldAskPassword := true
 
 			if noPrompt {
 				if defaultOktaUserName != nil {
 					username = *defaultOktaUserName
 				} else {
 					username = defaultUserName
-				}
-
-				if defaultOktaPassword != nil {
-					password = *defaultOktaPassword
-					shouldAskPassword = false
-				} else if defaultUserPassword != nil {
-					password = *defaultUserPassword
-					shouldAskPassword = false
 				}
 			} else {
 				defUser := defaultUserName
@@ -235,25 +225,9 @@ var states = []state{
 			el.MustSelectAllText().MustInput("")
 			el.MustInput(username)
 
-			if shouldAskPassword {
-				promptPasswd := &survey.Password{
-					Message: "Okta Password:",
-				}
-				survey.AskOne(promptPasswd, &password, survey.WithValidator(survey.Required))
-			}
+			inputSelector := `form:not(.o-form-saving) > div span.okta-form-input-field input[name="identifier"]:not([disabled])`
 
-			time.Sleep(time.Millisecond * 500)
-
-			pwdEl := pg.MustElement(`input[type="password"]`)
-			pwdEl.MustWaitVisible()
-			pwdEl.MustSelectAllText().MustInput("")
-			pwdEl.MustInput(password)
-
-			time.Sleep(time.Millisecond * 500)
-
-			submitSelector := `input:not([disabled]):not(.link-button-disabled):not(.btn-disabled)[type=submit]`
-
-			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(submitSelector)
+			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled]):not(.link-button-disabled):not(.btn-disabled)[type=submit]`)
 			if err == nil {
 				wait := pg.MustWaitRequestIdle()
 				btn.MustClick()
@@ -275,7 +249,7 @@ var states = []state{
 						case <-ctx.Done():
 							return
 						default:
-							_, err := pg.Sleeper(rod.NotFoundSleeper).Element(submitSelector)
+							_, err := pg.Sleeper(rod.NotFoundSleeper).Element(inputSelector)
 							if err != nil {
 								ch <- true
 								return
@@ -295,7 +269,120 @@ var states = []state{
 						}
 						return nil
 					}).
-						Element(submitSelector).Handle(func(e *rod.Element) error {
+						Element(inputSelector).Handle(func(e *rod.Element) error {
+						return e.WaitInvisible()
+					}).Do()
+
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						ch <- true
+						return
+					}
+				}()
+
+				select {
+				case <-ch:
+				case <-time.After(25 * time.Second):
+				}
+			}
+		},
+	},
+	{
+		name:     "OKTA password input",
+		selector: `form:not(.o-form-saving) > div span.okta-form-input-field input[type="password"]:not([disabled])`,
+		handler: func(pg *rod.Page, el *rod.Element, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string) {
+			errorSelector := `div.o-form-error-container`
+			errorContainer, err := pg.Sleeper(rod.NotFoundSleeper).Element(errorSelector)
+
+			if errorContainer != nil && err == nil {
+				t, _ := errorContainer.Text()
+				if t != "" {
+					fmt.Println(t)
+				}
+			}
+
+			infoSelector := `div.o-form-info-container`
+			infoContainer, err := pg.Sleeper(rod.NotFoundSleeper).Element(infoSelector)
+			if infoContainer != nil && err == nil {
+				t, _ := infoContainer.Text()
+				if t != "" {
+					fmt.Println(t)
+				}
+			}
+
+			var password string
+			shouldAskPassword := true
+
+			if noPrompt {
+				if defaultOktaPassword != nil {
+					password = *defaultOktaPassword
+					shouldAskPassword = false
+				} else if defaultUserPassword != nil {
+					password = *defaultUserPassword
+					shouldAskPassword = false
+				}
+			}
+
+			if shouldAskPassword {
+				promptPasswd := &survey.Password{
+					Message: "Okta Password:",
+				}
+				survey.AskOne(promptPasswd, &password, survey.WithValidator(survey.Required))
+			}
+
+			time.Sleep(time.Millisecond * 500)
+
+			el.MustWaitVisible()
+			el.MustSelectAllText().MustInput("")
+			el.MustInput(password)
+
+			inputSelector := `form:not(.o-form-saving) > div span.okta-form-input-field input[type="password"]:not([disabled])`
+
+			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`input:not([disabled]):not(.link-button-disabled):not(.btn-disabled)[type=submit]`)
+			if err == nil {
+				wait := pg.MustWaitRequestIdle()
+				btn.MustClick()
+				wait()
+
+				pContext := pg.GetContext()
+				defer func() {
+					pg.Context(pContext)
+				}()
+
+				ctx, cancel := context.WithCancel(pContext)
+				defer cancel()
+
+				ch := make(chan bool, 1)
+
+				go func() {
+					for {
+						select {
+						case <-ctx.Done():
+							return
+						default:
+							_, err := pg.Sleeper(rod.NotFoundSleeper).Element(inputSelector)
+							if err != nil {
+								ch <- true
+								return
+							}
+						}
+					}
+				}()
+
+				go func() {
+					pg.Timeout(20 * time.Second).Race().
+						Element(errorSelector + `.o-form-has-errors`).Handle(func(e *rod.Element) error {
+						if e != nil {
+							t, _ := e.Text()
+							if t != "" {
+								return errors.New("error returned")
+							}
+						}
+						return nil
+					}).
+						Element(inputSelector).Handle(func(e *rod.Element) error {
 						return e.WaitInvisible()
 					}).Do()
 
@@ -499,6 +586,7 @@ func createLoginUrl(appIDUri string, tenantID string, assertionConsumerServiceUR
 
 func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string) string {
 	browser := rod.New().MustConnect()
+
 	defer browser.MustClose()
 
 	router := browser.HijackRequests()
