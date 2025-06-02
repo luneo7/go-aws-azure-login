@@ -615,6 +615,21 @@ func performLogin(urlString string, noPrompt bool, defaultUserName string, defau
 		}
 	})
 
+	router.MustAdd("https://*okta*", func(ctx *rod.Hijack) {
+		reqURL, error := url.Parse(ctx.Request.URL().String())
+		if error == nil {
+			values := reqURL.Query()
+			if values.Has("username") {
+				values.Del("username")
+				reqURL.RawQuery = values.Encode()
+
+				ctx.ContinueRequest(&proto.FetchContinueRequest{URL: reqURL.String()})
+				return
+			}
+		}
+		ctx.ContinueRequest(&proto.FetchContinueRequest{})
+	})
+
 	go router.Run()
 
 	page := browser.MustPage()
