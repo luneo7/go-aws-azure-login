@@ -57,6 +57,7 @@ func init() {
 
 func main() {
 	var profileName string
+	isGui := mode == "gui"
 
 	if profile != "" {
 		profileName = profile
@@ -70,10 +71,10 @@ func main() {
 		configureProfile(profileName)
 	} else {
 		if allProfiles {
-			loginAll(forceRefresh, noVerifySSL, noPrompt)
+			loginAll(forceRefresh, noVerifySSL, noPrompt, isGui)
 
 		} else {
-			login(profileName, noVerifySSL, noPrompt)
+			login(profileName, noVerifySSL, noPrompt, isGui)
 		}
 	}
 

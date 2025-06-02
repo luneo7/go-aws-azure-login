@@ -17,6 +17,7 @@ import (
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
 	"github.com/google/uuid"
 
@@ -524,7 +525,8 @@ func loadProfile(profileName string) profileConfig {
 func login(
 	profileName string,
 	awsNoVerifySsl bool,
-	noPrompt bool) {
+	noPrompt bool,
+	isGui bool) {
 
 	profile := loadProfile(profileName)
 
@@ -540,7 +542,7 @@ func login(
 
 	loginUrl := createLoginUrl(profile.AzureAppIDUri, profile.AzureTenantID, assertionConsumerServiceURL)
 
-	saml := performLogin(loginUrl, noPrompt, profile.AzureDefaultUsername, profile.AzureDefaultPassword, profile.OktaDefaultUsername, profile.OktaDefaultPassword)
+	saml := performLogin(loginUrl, noPrompt, profile.AzureDefaultUsername, profile.AzureDefaultPassword, profile.OktaDefaultUsername, profile.OktaDefaultPassword, isGui)
 
 	roles := parseRolesFromSamlResponse(saml)
 
@@ -549,7 +551,7 @@ func login(
 	assumeRole(profileName, saml, rl, durationHours, awsNoVerifySsl, profile.Region)
 }
 
-func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool) {
+func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool) {
 	allProfiles := getAllProfileNames()
 
 	for _, profileName := range allProfiles {
@@ -557,7 +559,7 @@ func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool) {
 			continue
 		}
 
-		login(profileName, awsNoVerifySsl, noPrompt)
+		login(profileName, awsNoVerifySsl, noPrompt, isGui)
 	}
 }
 
@@ -584,8 +586,11 @@ func createLoginUrl(appIDUri string, tenantID string, assertionConsumerServiceUR
 	return fmt.Sprintf("https://login.microsoftonline.com/%s/saml2?SAMLRequest=%s", tenantID, url.QueryEscape(samlBase64))
 }
 
-func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string) string {
-	browser := rod.New().MustConnect()
+func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string, isGui bool) string {
+	l := launcher.New().Headless(!isGui)
+	defer l.Cleanup()
+	u := l.MustLaunch()
+	browser := rod.New().ControlURL(u).MustConnect()
 
 	defer browser.MustClose()
 
@@ -637,22 +642,36 @@ func performLogin(urlString string, noPrompt bool, defaultUserName string, defau
 	page.MustNavigate(urlString)
 	wait()
 
-Loop:
-	for {
-		for _, st := range states {
+	if isGui {
+	LoopGui:
+		for {
 			select {
 			case x, ok := <-samlResponseChan:
 				if ok {
 					samlResponse = x
-					break Loop
+					break LoopGui
 				}
 			default:
 			}
+		}
+	} else {
+	Loop:
+		for {
+			for _, st := range states {
+				select {
+				case x, ok := <-samlResponseChan:
+					if ok {
+						samlResponse = x
+						break Loop
+					}
+				default:
+				}
 
-			el, err := page.Sleeper(rod.NotFoundSleeper).Element(st.selector)
+				el, err := page.Sleeper(rod.NotFoundSleeper).Element(st.selector)
 
-			if err == nil {
-				st.handler(page, el, noPrompt, defaultUserName, defaultUserPassword, defaultOktaUserName, defaultOktaPassword)
+				if err == nil {
+					st.handler(page, el, noPrompt, defaultUserName, defaultUserPassword, defaultOktaUserName, defaultOktaPassword)
+				}
 			}
 		}
 	}
