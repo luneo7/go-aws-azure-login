@@ -536,7 +536,8 @@ func login(
 	profileName string,
 	awsNoVerifySsl bool,
 	noPrompt bool,
-	isGui bool) {
+	isGui bool,
+	disableLeakless bool) {
 
 	profile := loadProfile(profileName)
 
@@ -552,7 +553,7 @@ func login(
 
 	loginUrl := createLoginUrl(profile.AzureAppIDUri, profile.AzureTenantID, assertionConsumerServiceURL)
 
-	saml := performLogin(loginUrl, noPrompt, profile.AzureDefaultUsername, profile.AzureDefaultPassword, profile.OktaDefaultUsername, profile.OktaDefaultPassword, isGui)
+	saml := performLogin(loginUrl, noPrompt, profile.AzureDefaultUsername, profile.AzureDefaultPassword, profile.OktaDefaultUsername, profile.OktaDefaultPassword, isGui, disableLeakless)
 
 	roles := parseRolesFromSamlResponse(saml)
 
@@ -561,7 +562,7 @@ func login(
 	assumeRole(profileName, saml, rl, durationHours, awsNoVerifySsl, profile.Region)
 }
 
-func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool) {
+func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool, disableLeakless bool) {
 	allProfiles := getAllProfileNames()
 
 	for _, profileName := range allProfiles {
@@ -569,7 +570,7 @@ func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool)
 			continue
 		}
 
-		login(profileName, awsNoVerifySsl, noPrompt, isGui)
+		login(profileName, awsNoVerifySsl, noPrompt, isGui, disableLeakless)
 	}
 }
 
@@ -596,16 +597,19 @@ func createLoginUrl(appIDUri string, tenantID string, assertionConsumerServiceUR
 	return fmt.Sprintf("https://login.microsoftonline.com/%s/saml2?SAMLRequest=%s", tenantID, url.QueryEscape(samlBase64))
 }
 
-func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string, isGui bool) string {
-	var browser *rod.Browser
+func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string, isGui bool, disableLeakless bool) string {
+	var l *launcher.Launcher
 	if isGui {
-		l := launcher.NewAppMode(urlString)
+		l = launcher.NewAppMode(urlString)
 		l.Delete("disable-site-isolation-trials")
-		u := l.MustLaunch()
-		browser = rod.New().ControlURL(u).MustConnect()
 	} else {
-		browser = rod.New().MustConnect()
+		l = launcher.New()
 	}
+
+	l.Leakless(!disableLeakless)
+
+	u := l.MustLaunch()
+	browser := rod.New().ControlURL(u).MustConnect()
 
 	defer browser.MustClose()
 
@@ -665,6 +669,7 @@ func performLogin(urlString string, noPrompt bool, defaultUserName string, defau
 	wait := page.WaitNavigation(proto.PageLifecycleEventNameDOMContentLoaded)
 
 	wait()
+
 	if isGui && !noPrompt {
 		r, ok := <-samlResponseChan
 		if ok {
