@@ -598,13 +598,7 @@ func createLoginUrl(appIDUri string, tenantID string, assertionConsumerServiceUR
 }
 
 func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string, isGui bool, disableLeakless bool) string {
-	var l *launcher.Launcher
-	if isGui {
-		l = launcher.NewAppMode(urlString)
-		l.Delete("disable-site-isolation-trials")
-	} else {
-		l = launcher.New()
-	}
+	l := launcher.New().Headless(!isGui)
 
 	l.Leakless(!disableLeakless)
 
@@ -656,18 +650,9 @@ func performLogin(urlString string, noPrompt bool, defaultUserName string, defau
 
 	go router.Run()
 
-	var page *rod.Page
-
-	if isGui {
-		pages := browser.MustPages()
-		page = pages.First()
-	} else {
-		page = browser.MustPage(urlString)
-	}
-
-	page.SetExtraHeaders([]string{"Accept-Language", "en"})
+	page := browser.MustPage()
 	wait := page.WaitNavigation(proto.PageLifecycleEventNameDOMContentLoaded)
-
+	page.MustNavigate(urlString)
 	wait()
 
 	if isGui && !noPrompt {
