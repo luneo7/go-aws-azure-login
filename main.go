@@ -15,6 +15,7 @@ var (
 	noVerifySSL     bool
 	noPrompt        bool
 	disableLeakless bool
+	fastPass        bool
 )
 
 func init() {
@@ -35,6 +36,8 @@ func init() {
 		noPromptUsage               = "Do not prompt for input and accept the default choice"
 		disableLeaklessDefaultValue = false
 		disableLeaklessUsage        = "Disable leakless if you are having issues with it"
+		fastPassDefaultValue        = false
+		fastPassUsage               = "Use Okta FastPass verification"
 	)
 
 	flag.StringVar(&profile, "profile", profileDefaultValue, profileUsage)
@@ -50,6 +53,7 @@ func init() {
 	flag.BoolVar(&noVerifySSL, "no-verify-ssl", noVerifySSLDefaultValue, noVerifySSLUsage)
 	flag.BoolVar(&noPrompt, "no-prompt", noPromptDefaultValue, noPromptUsage)
 	flag.BoolVar(&disableLeakless, "disable-leakless", disableLeaklessDefaultValue, disableLeaklessUsage)
+	flag.BoolVar(&fastPass, "fastpass", fastPassDefaultValue, fastPassUsage)
 
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -75,9 +79,9 @@ func main() {
 		configureProfile(profileName)
 	} else {
 		if allProfiles {
-			loginAll(forceRefresh, noVerifySSL, noPrompt, isGui, disableLeakless)
+			loginAll(forceRefresh, noVerifySSL, noPrompt, isGui, disableLeakless, fastPass)
 		} else {
-			login(profileName, noVerifySSL, noPrompt, isGui, disableLeakless)
+			login(profileName, noVerifySSL, noPrompt, isGui, disableLeakless, fastPass)
 		}
 	}
 

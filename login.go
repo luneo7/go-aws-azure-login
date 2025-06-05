@@ -30,6 +30,9 @@ const (
 	AWS_SAML_ENDPOINT     = "https://signin.aws.amazon.com/saml"
 	AWS_CN_SAML_ENDPOINT  = "https://signin.amazonaws.cn/saml"
 	AWS_GOV_SAML_ENDPOINT = "https://signin.amazonaws-us-gov.com/saml"
+	OKTA_SELECT_FAST_PASS = "OKTA SELECT FastPass"
+	OKTA_SELECT_PUSH_FORM = "OKTA SELECT PUSH Form"
+	OKTA_DO_PUSH_FORM     = "OKTA DO PUSH Form"
 
 	WIDTH  = 425
 	HEIGHT = 550
@@ -414,7 +417,30 @@ var states = []state{
 		},
 	},
 	{
-		name:     "OKTA SELECT PUSH Form",
+		name:     OKTA_SELECT_FAST_PASS,
+		selector: `div[data-se="okta_verify-signed_nonce"] > a:not([disabled]):not(.link-button-disabled):not(.btn-disabled)`,
+		handler: func(pg *rod.Page, el *rod.Element, _ bool, defaultUserName string, _ *string, _ *string, _ *string, _ bool) {
+			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".infobox-error")
+
+			if alert != nil && err == nil {
+				t, _ := alert.Text()
+				if t != "" {
+					fmt.Println(t)
+				}
+			}
+
+			btn, err := pg.Sleeper(rod.NotFoundSleeper).Element(`div[data-se="okta_verify-signed_nonce"] > a:not([disabled]):not(.btn-disabled):not(.link-button-disabled)`)
+			if err == nil && btn != nil {
+				btn.MustWaitVisible()
+				wait := pg.MustWaitRequestIdle()
+				btn.MustClick()
+				wait()
+				time.Sleep(time.Millisecond * 500)
+			}
+		},
+	},
+	{
+		name:     OKTA_SELECT_PUSH_FORM,
 		selector: `div[data-se="okta_verify-push"] > a:not([disabled]):not(.link-button-disabled):not(.btn-disabled)`,
 		handler: func(pg *rod.Page, el *rod.Element, _ bool, defaultUserName string, _ *string, _ *string, _ *string, _ bool) {
 			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".infobox-error")
@@ -437,7 +463,7 @@ var states = []state{
 		},
 	},
 	{
-		name:     "OKTA DO PUSH Form",
+		name:     OKTA_DO_PUSH_FORM,
 		selector: `a.send-push:not([disabled]):not(.link-button-disabled):not(.btn-disabled)`,
 		handler: func(pg *rod.Page, el *rod.Element, _ bool, defaultUserName string, _ *string, _ *string, _ *string, _ bool) {
 			alert, err := pg.Sleeper(rod.NotFoundSleeper).Element(".infobox-error")
@@ -537,7 +563,8 @@ func login(
 	awsNoVerifySsl bool,
 	noPrompt bool,
 	isGui bool,
-	disableLeakless bool) {
+	disableLeakless bool,
+	fastPass bool) {
 
 	profile := loadProfile(profileName)
 
@@ -553,7 +580,7 @@ func login(
 
 	loginUrl := createLoginUrl(profile.AzureAppIDUri, profile.AzureTenantID, assertionConsumerServiceURL)
 
-	saml := performLogin(loginUrl, noPrompt, profile.AzureDefaultUsername, profile.AzureDefaultPassword, profile.OktaDefaultUsername, profile.OktaDefaultPassword, isGui, disableLeakless)
+	saml := performLogin(loginUrl, noPrompt, profile.AzureDefaultUsername, profile.AzureDefaultPassword, profile.OktaDefaultUsername, profile.OktaDefaultPassword, isGui, disableLeakless, fastPass)
 
 	roles := parseRolesFromSamlResponse(saml)
 
@@ -562,7 +589,7 @@ func login(
 	assumeRole(profileName, saml, rl, durationHours, awsNoVerifySsl, profile.Region)
 }
 
-func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool, disableLeakless bool) {
+func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool, disableLeakless bool, fastPass bool) {
 	allProfiles := getAllProfileNames()
 
 	for _, profileName := range allProfiles {
@@ -570,7 +597,7 @@ func loginAll(forceRefresh bool, awsNoVerifySsl bool, noPrompt bool, isGui bool,
 			continue
 		}
 
-		login(profileName, awsNoVerifySsl, noPrompt, isGui, disableLeakless)
+		login(profileName, awsNoVerifySsl, noPrompt, isGui, disableLeakless, fastPass)
 	}
 }
 
@@ -597,7 +624,7 @@ func createLoginUrl(appIDUri string, tenantID string, assertionConsumerServiceUR
 	return fmt.Sprintf("https://login.microsoftonline.com/%s/saml2?SAMLRequest=%s", tenantID, url.QueryEscape(samlBase64))
 }
 
-func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string, isGui bool, disableLeakless bool) string {
+func performLogin(urlString string, noPrompt bool, defaultUserName string, defaultUserPassword *string, defaultOktaUserName *string, defaultOktaPassword *string, isGui bool, disableLeakless bool, fastpass bool) string {
 	l := launcher.New().Headless(!isGui)
 
 	l.Leakless(!disableLeakless)
@@ -671,6 +698,10 @@ func performLogin(urlString string, noPrompt bool, defaultUserName string, defau
 						break Loop
 					}
 				default:
+				}
+
+				if (fastpass && (st.name == OKTA_SELECT_PUSH_FORM || st.name == OKTA_DO_PUSH_FORM)) || (!fastpass && st.name == OKTA_SELECT_FAST_PASS) {
+					continue
 				}
 
 				el, err := page.Sleeper(rod.NotFoundSleeper).Element(st.selector)
